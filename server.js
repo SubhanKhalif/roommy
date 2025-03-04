@@ -5,34 +5,44 @@ import dotenv from 'dotenv';
 import app from './app.js';
 import { Server } from 'socket.io';
 
-dotenv.config({ path: './config.env' });
-const DBAuth = process.env.DB.replace('<password>', process.env.DBpassword);
+dotenv.config();  // Loads from .env by default
 
-await mongoose.connect(DBAuth, {
-  useUnifiedTopology: true
+const DBAuth = process.env.DB.replace('<password>', process.env.DB_PASSWORD);
+
+const connectDB = async () => {
+  try {
+    await mongoose.connect(DBAuth, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log("DB connection successful");
+  } catch (error) {
+    console.error("Database connection failed", error);
+    process.exit(1);
+  }
+};
+
+connectDB();
+
+process.on('unhandledRejection', (err) => {
+  console.log("Unhandled Rejection:", err.name, err.message);
 });
-console.log("DB connection successful");
 
-process.on('unhandledRejection', err => {
-  console.log(err.name, err.message);
-  console.log("Unhandled rejection");
-});
-
-const port = process.env.PORT;
+const port = process.env.PORT || 5000;
 
 const server = app.listen(port, () => {
-  console.log(`SERVER RUNNING IN PORTNO:${port}`);
+  console.log(`SERVER RUNNING ON PORT: ${port}`);
 });
 
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:3000'],
-  }
+    origin: ['http://localhost:3000', 'https://roommies.vercel.app'],
+  },
 });
 
 io.on('connection', (socket) => {
   socket.on("setup", (userData) => {
-    console.log("a user connected");
+    console.log("A user connected");
     socket.join(userData._id);
     socket.emit("connected");
   });
@@ -51,18 +61,17 @@ io.on('connection', (socket) => {
   });
 
   socket.on("removechatbar-send", (chatId) => {
-    console.log(`remove chat bar for this id ${chatId}`);
-    socket.to(chatId).emit("removechatbar-recieve", chatId);
+    console.log(`Remove chat bar for this ID: ${chatId}`);
+    socket.to(chatId).emit("removechatbar-receive", chatId);
   });
 
   socket.on("new message", (newMessageRecieved) => {
     const chat = newMessageRecieved.chat;
-
-    if (!chat.users) return console.log("users not defined");
+    if (!chat.users) return console.log("Users not defined");
 
     chat.users.forEach((user) => {
       if (user._id === newMessageRecieved.sender._id) return;
-      socket.in(user._id).emit('message recieved', newMessageRecieved);
+      socket.in(user._id).emit('message received', newMessageRecieved);
     });
   });
 });
