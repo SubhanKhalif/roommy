@@ -1,38 +1,72 @@
+import multer from "multer";
+import path from "path";
 import Post from "../models/Post.js";
 
-// Create a new post
-export const createPost = async (req, res) => {
-    try {
-        const { title, location, rent, description } = req.body;
-        
-        if (!req.user) {
-            return res.status(401).json({ message: "Not authenticated" });
-        }
+// Configure storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/"); // Save files in the "uploads" directory
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname); // Get file extension
+    const fileName = `${Date.now()}-${file.originalname}`; // Unique filename
+    cb(null, fileName);
+  }
+});
 
-        const post = await Post.create({
-            title,
-            location,
-            rent,
-            description,
-            user: req.user._id,
-            authorName: req.user.name,
-            authorPic: req.user.pic
-        });
-
-        res.status(201).json({
-            status: 'success',
-            data: {
-                post
-            }
-        });
-    } catch (error) {
-        console.error("Error creating post:", error);
-        res.status(500).json({ 
-            status: 'error',
-            message: error.message || "Server error" 
-        });
-    }
+// File filter to allow only images/videos
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith("image/") || file.mimetype.startsWith("video/")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only images and videos are allowed"), false);
+  }
 };
+
+export const upload = multer({ storage, fileFilter });
+
+// Create a new post with media upload
+export const createPost = [
+  upload.single("media"),
+  async (req, res) => {
+    try {
+      const { title, location, rent, description } = req.body;
+      
+      if (!req.user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      // Handle media file if uploaded
+      const mediaUrl = req.file 
+        ? `${process.env.API_URL || "http://localhost:4000"}/uploads/${req.file.filename}`
+        : null;
+
+      const post = await Post.create({
+        title,
+        location,
+        rent,
+        description,
+        media: mediaUrl,
+        user: req.user._id,
+        authorName: req.user.name,
+        authorPic: req.user.pic
+      });
+
+      res.status(201).json({
+        status: 'success',
+        data: {
+          post
+        }
+      });
+    } catch (error) {
+      console.error("Error creating post:", error);
+      res.status(500).json({ 
+        status: 'error',
+        message: error.message || "Server error" 
+      });
+    }
+  }
+];
 
 // Fetch all posts
 export const getAllPosts = async (req, res) => {
